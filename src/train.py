@@ -1,45 +1,52 @@
-import pandas as pd
-from sklearn.linear_model import LinearRegression
 import mlflow
+import mlflow.sklearn
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.ensemble import RandomForestClassifier
 import joblib
-import os
-
-def load_data():
-    return pd.DataFrame({
-        'open':[100,102,101,103,104],
-        'close':[101,103,102,104,105]
-    })
+from pathlib import Path
 
 def train():
-    mlflow.set_tracking_uri("file:./mlflow")
+
+    # Load dataset
+    df = pd.read_csv("data/processed/processed.csv")
+
+    # Basic features + label
+    X = df[["SMA_10","SMA_50","EMA_12","EMA_26","MACD","RSI","vol_10"]]
+    y = (df["Close"].shift(-1) > df["Close"]).astype(int)  # next-day direction
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, shuffle=False
+    )
+
+    model = RandomForestClassifier(n_estimators=200)
+    model.fit(X_train, y_train)
+
+    preds = model.predict(X_test)
+    acc = accuracy_score(y_test, preds)
+
+    print("Validation Accuracy:", acc)
+
+    # ───────────────────────────────────────────
+    # MLflow logs
+    # ───────────────────────────────────────────
     mlflow.set_experiment("finance-model")
-
-    df = load_data()
-    X = df[['open']]
-    y = df['close']
-
-    model = LinearRegression()
-
     with mlflow.start_run():
-        model.fit(X, y)
-        mlflow.log_param("model", "LinearRegression")
-
-        # Ensure models/ exists even if running from src/
-        model_dir = os.path.join(os.path.dirname(__file__), "..", "models")
-        model_dir = os.path.abspath(model_dir)
-        os.makedirs(model_dir, exist_ok=True)
-
-        model_path = os.path.join(model_dir, "model.pkl")
-        from pathlib import Path
-        Path("models").mkdir(parents=True, exist_ok=True)
-        
-        # Save trained model
-        joblib.dump(model, "models/model.pkl")
-        print("Model saved to models/model.pkl")
-
-
-        # log into mlflow as usual
+        mlflow.log_metric("val_accuracy", acc)
         mlflow.sklearn.log_model(model, "model")
+
+    # ───────────────────────────────────────────
+    # SAVE MODEL LOCALLY (FIX)
+    # ───────────────────────────────────────────
+
+    # Make sure models/ folder exists
+    Path("models").mkdir(parents=True, exist_ok=True)
+
+    # Save model inside the folder
+    joblib.dump(model, "models/model.pkl")
+
+    print("Model saved → models/model.pkl")
 
 if __name__ == "__main__":
     train()
