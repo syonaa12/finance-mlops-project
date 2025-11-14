@@ -30,7 +30,13 @@ def train():
         os.makedirs(model_dir, exist_ok=True)
 
         model_path = os.path.join(model_dir, "model.pkl")
-        joblib.dump(model, model_path)
+        from pathlib import Path
+        Path("models").mkdir(parents=True, exist_ok=True)
+        
+        # Save trained model
+        joblib.dump(model, "models/model.pkl")
+        print("Model saved to models/model.pkl")
+
 
         # log into mlflow as usual
         mlflow.sklearn.log_model(model, "model")
